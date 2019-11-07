@@ -11,20 +11,16 @@ use strict;
 use warnings;
 use Getopt::Long qw(GetOptions);
 
-#
 # Constants
-#
 use constant SCRIPT_NAME        => 'create-exif-renamed-files.pl';
 use constant EXIFTOOL           => '/usr/bin/exiftool';
+use constant BACKUP_EXT         => '.BAK';
 
-#
 # Variables
-#
 my $help = '';
 my $verbose = '';
 my $source_path = '';
 my $destination_path = '';
-
 
 # ============================================================================= #
 # ===============================   MAIN   ==================================== #
@@ -143,7 +139,7 @@ sub create_renamed_copy {
 #   - Date/Time information from EXIF data
 #   
 sub create_file {
-	use File::Copy qw(copy);
+	use File::Copy qw(copy move);
 	
 	my ($file, $datetime) = @_;	
 	my ($newfile);
@@ -154,6 +150,7 @@ sub create_file {
     if (! -e $newfile) {
         print "Creating file: '$newfile'\n" if $verbose;
         copy($file, $newfile) or die "Copy failed: $!\n";
+        move($file, $file . BACKUP_EXT) or die "Rename failed: $!\n";
     }
 }
 
