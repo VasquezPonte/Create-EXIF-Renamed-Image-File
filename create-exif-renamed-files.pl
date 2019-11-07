@@ -168,12 +168,14 @@ sub create_file {
 sub generate_full_path {
     use File::Basename;
     use Digest::MD5 qw(md5_hex);
+    use File::Path qw(make_path);
     
     my ($file, $datetime) = @_;    
     my ($name, $path, $suffix);
     my ($date, $time);
     my ($newpath, $newname, $newfile);
     my ($subpath, $digest);
+    my ($err);
         
     ($date, $time) = split(' ', $datetime);
     $date =~ tr/:/-/;
@@ -186,8 +188,9 @@ sub generate_full_path {
     if ($destination_path ne '') {
     	$subpath = substr($path, length($source_path));
         $newpath = $destination_path . $subpath;
-        unless(-e $newpath or mkdir $newpath) {
-            die 'Unable to create "' . $newpath .'"' ."\n\n";
+        unless(-e $newpath) {
+        	make_path($newpath, {error => \$err});
+            die 'Unable to create "' . $newpath .'"' ."\n\n" if ($err && @$err);
         }
     } else {
         $newpath = $path;
