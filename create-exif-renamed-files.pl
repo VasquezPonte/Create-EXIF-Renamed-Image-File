@@ -2,9 +2,9 @@
 #============================================================================== #
 # Program:      Create EXIF renamed files                                       #
 # Description:  Create renamed copy of image files given the EXIF Date/Time     #
-# Version:      1.0                                                             #
+# Version:      2.0                                                             #
 # File:         create-exif-renamed-files.pl                                    #
-# Author:       Vásquez Ponte, 2019 (https://vasquezponte.com)                  #
+# Author:       Vásquez Ponte, 2021 (https://vasquezponte.com)                  #
 #============================================================================== #
 
 use strict;
@@ -50,21 +50,17 @@ if ($source_path eq '' || $help) {
         exit 0;
 }
 
-print "\n===\n= Start: ". (localtime) ."\n===\n\n" if $verbose;
-
+print "===\n= Start: ". (localtime) ."\n===\n\n" if $verbose;
 print 'Checking source folder "'. $source_path .'"' ."\n" if $verbose;
 check_folder(\$source_path);
-
 if ($destination_path ne '') {
     print 'Checking destination folder "'. $destination_path .'"' ."\n" if $verbose;
     check_folder(\$destination_path);
 }
-
 # Recursively process all image files in the directory
 print 'Processing files in source folder "'. $source_path .'"' ."\n\n" if $verbose;
 process_files($source_path);
-
-print "===\n= End: ". (localtime) ."\n===\n\n" if $verbose;
+print "===\n= End: ". (localtime) ."\n===\n" if $verbose;
 
 
 # ============================================================================= #
@@ -80,17 +76,15 @@ print "===\n= End: ". (localtime) ."\n===\n\n" if $verbose;
 sub process_files {
     my $path = shift;
 
-    opendir (DIR, $path)
-        or die "Unable to open $path: $!";
+    opendir (DIR, $path) or die "Unable to open $path: $!";
     my @files = grep { !/^\.{1,2}$/ } readdir (DIR);
     closedir (DIR);
-
     @files = map { $path . '/' . $_ } @files;
     for (@files) {
         if (-d $_) {
             process_files ($_);
         } else {
-            if ( (! -l $_) && (grep /\.(?:png|gif|jpg|jpeg)$/i, $_) ) {
+            if ( (! -l $_) && (grep /\.(?:png|gif|jpg|jpeg|mpg|mp4|mov|wav|wma)$/i, $_) ) {
                 create_renamed_copy($_);
             }
         }
@@ -106,26 +100,22 @@ sub create_renamed_copy {
     use Image::ExifTool qw(ImageInfo);
 
     my $file = shift;
-    my $exif_date_time = '';
-
-    my $info = ImageInfo($file, 'CreateDate', 'DateTimeOriginal', 'FileModifyDate');
-    if (keys %{ $info}) {
-        print 'Reading EXIF information from image file "'. $_ .'"' . "\n" if $verbose;
-        if (exists $info->{CreateDate}) {
-            print 'CreateDate: ' . $info->{CreateDate} ."\n" if $verbose;
-            $exif_date_time = $info->{CreateDate};
-        } elsif (exists $info->{DateTimeOriginal}) {
-            print 'DateTimeOriginal: ' . $info->{DateTimeOriginal} ."\n" if $verbose;
-            $exif_date_time = $info->{DateTimeOriginal};
-        } else {
-            print 'No Date/Time information in EXIF data in file "'. $_ .'"' . "\n";
+    my @tags = ('CreateDate', 'DateTimeOriginal', 'MediaCreateDate', 'TrackCreateDate');
+    print 'Reading EXIF information from file "'. $file .'"' . "\n" if $verbose;
+    my $info = ImageInfo($file, \@tags);
+    my $exif_date_time;
+    foreach my $tag (@tags) {
+        if (exists $info->{$tag}) {
+            print $tag .': ' . $info->{$tag} ."\n" if $verbose;
+            $exif_date_time = $info->{$tag};
+            last;
         }
-    } else {
-        print 'No EXIF data in file "'. $_ .'"' . "\n";
     }
-
-    # Create file
-    if ($exif_date_time ne '') {
+    if (!$exif_date_time) {
+        print 'No EXIF data in file "'. $file .'"' . "\n";
+    } elsif ($exif_date_time eq '0000:00:00 00:00:00') {
+        print 'No Date/Time information in EXIF data in file "'. $file .'"' . "\n";
+    } else {
         create_file($_, $exif_date_time);
     }
     print "\n" if $verbose;
@@ -143,10 +133,7 @@ sub create_file {
 	
 	my ($file, $datetime) = @_;	
 	my ($newfile);
-	
 	$newfile = generate_full_path($file, $datetime);
-	print 'Generated full path: "'. $newfile .'"' ."\n" if $verbose;
-
     if (! -e $newfile) {
         print "Creating file: '$newfile'\n" if $verbose;
         copy($file, $newfile) or die "Copy failed: $!\n";
@@ -166,36 +153,30 @@ sub generate_full_path {
     use File::Basename;
     use Digest::MD5 qw(md5_hex);
     use File::Path qw(make_path);
-    
+
     my ($file, $datetime) = @_;    
-    my ($name, $path, $suffix);
-    my ($date, $time);
-    my ($newpath, $newname, $newfile);
-    my ($subpath, $digest);
-    my ($err);
-        
-    ($date, $time) = split(' ', $datetime);
+    my ($date, $time) = split(' ', $datetime);
     $date =~ tr/:/-/;
     $time =~ tr/://d;
     # ISO 8601
-    $newname = $date . 'T' . $time;
-
+    my ($newpath, $newfile);
+    my $newname = $date . 'T' . $time;
     # fileparse("/foo/bar/baz.jpg", ".jpg") returns  ("baz", "/foo/bar/", ".jpg")
-    ($name, $path, $suffix) = fileparse($file, qr/\.[^.]*/);    
+    my ($name, $path, $suffix) = fileparse($file, qr/\.[^.]*/);
     if ($destination_path ne '') {
-    	$subpath = substr($path, length($source_path));
+        my $subpath = substr($path, length($source_path));
         $newpath = $destination_path . $subpath;
         unless(-e $newpath) {
+            my $err;
         	make_path($newpath, {error => \$err});
-            die 'Unable to create "' . $newpath .'"' ."\n\n" if ($err && @$err);
+            die 'Unable to create "' . $newpath .'"' ."\n" if ($err && @$err);
         }
     } else {
         $newpath = $path;
     }
-    
     $newfile = $newpath . $newname . lc $suffix;
     if (-e $newfile) {
-        $digest = md5_hex($name . $suffix);
+        my $digest = md5_hex($name . $suffix);
         $newfile = $newpath . $newname .'_'. $digest . lc $suffix;
     }
 
@@ -208,22 +189,18 @@ sub generate_full_path {
 # Accepts one argument: the full path to a directory.
 #
 sub check_folder {
-    use File::Temp qw/ tempfile tempdir /;
+    use File::Temp qw(tempfile tempdir);
     use Try::Tiny;
-	
-    my $path_ref = shift;
-    
-    if ((! -e $$path_ref) || (! -d $$path_ref)) {
-        die 'Error: "'. $$path_ref .'" does not exist or is not a directory.'. "\n\n";
-    }
 
+    my $path_ref = shift;
+    if ((! -e $$path_ref) || (! -d $$path_ref)) {
+        die 'Error: "'. $$path_ref .'" does not exist or is not a directory.'. "\n";
+    }
     # Remove trailing slash, except for the root directory
     $$path_ref =~ s{(.+)/\z}{$1};
-    
     try {
         my ($fh, $filename) = tempfile(DIR => $$path_ref, SUFFIX => '.tmp', UNLINK => 1);
-        print "\n" if $verbose;
     } catch {
-        die 'Error: Directory "'. $$path_ref .'" is not writable.'. "\n\n";
+        die 'Error: Directory "'. $$path_ref .'" is not writable.'. "\n";
     }
 }
