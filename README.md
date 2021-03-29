@@ -1,5 +1,5 @@
 # Create EXIF renamed image files
-Copy image files from the source directory to the destination directory using the EXIF Date/Time to rename the files. If the destination directory is not given, the files will be created in the source directory conserving the original files.
+Copy image and video files from the source directory to the destination directory using the EXIF Date/Time to rename the files. If the destination directory is not given, the files will be created in the source directory conserving the original files.
 
 Usage:
 
