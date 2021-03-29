@@ -8,5 +8,5 @@ Usage:
 where option include:
 
     -v, --verbose	explain what is being done
-    -h, --help		display this help and exit
+    -h, --help	display this help and exit
 
